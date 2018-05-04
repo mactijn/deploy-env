@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+fail() {
+    echo "ERROR: ${1}" >&2
+    exit 1
+}
+
+calc() {
+    echo "${1}" | bc -l
+}
+
+getContainerProperty() {
+    FILTER="${1}"
+    CONTAINER_NAME="${2}"
+    docker inspect -f "{{${FILTER}}}" "${CONTAINER_NAME}" 2>/dev/null || true
+}
+
+
+waitForHealthStatus() {
+    CONTAINER_NAME="${2}"
+    TIMEOUT="${3:-15}"
+
+    COUNTDOWN="${TIMEOUT}"
+    while true; do
+
+        VALUE="$(getContainerProperty '.State.Health.Status' "${CONTAINER_NAME}")"
+
+        PROGRESS=$(expr ${TIMEOUT} - ${COUNTDOWN})
+        echo -en "$(progress "${PROGRESS}" "${TIMEOUT}" 25) ${CONTAINER_NAME} ${VALUE}   \r"
+
+        [ "${VALUE}" != "unhealthy" ] || (echo ''; fail 'primary container health check failed')
+        [ "${VALUE}" != "healthy"   ] || break
+
+        [ ${COUNTDOWN} -gt 0 ] || (echo ''; fail 'timeout')
+        COUNTDOWN=$(expr ${COUNTDOWN} - 1)
+
+        sleep 1
+    done
+}
+
+waitForHealthStatus healthy "${1}"
